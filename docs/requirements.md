@@ -46,7 +46,8 @@ Notes on the deliberate choices:
 
 **Employee Directory**
 - Server-side pagination, sorting, and search over 10,000 records. Search matches name and email.
-- Filters on country, department, job level, and active/inactive status.
+- Filters on country, department, job level, and active/inactive status. Multiple values within one filter are OR-matched; different filters are AND-matched.
+- Sorting by salary orders on the USD-normalized value, since comparing raw local amounts would rank ₹5,000,000 above $200,000.
 - Indexes on the filter and sort columns so queries stay fast at full dataset size.
 
 **Employee CRUD**
