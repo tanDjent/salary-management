@@ -53,9 +53,10 @@ Notes on the deliberate choices:
 **Employee CRUD**
 - View a single employee's detail.
 - Add a new employee.
-- Edit an employee, including their salary and currency.
+- Edit an employee (PATCH: only the fields sent are changed).
 - Deactivate (soft-delete) and reactivate.
-- Server-side validation: unique email, non-negative salary, valid currency and lookup references.
+- Pay currency is derived from the employee's country rather than submitted, so the two cannot contradict each other. Changing country therefore changes the currency, and the request must supply a new salary — the stored figure is denominated in the old currency and reinterpreting it would silently misstate someone's pay.
+- Server-side validation: unique email (409), non-negative salary, existing lookup references, and no more decimal places than the currency supports (422).
 
 **Pay Analytics Dashboard**
 - KPI cards, all normalized to USD and computed over active employees:
