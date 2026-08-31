@@ -18,7 +18,7 @@ Two things must be true for the MVP to be considered successful:
 | Backend | Python + FastAPI | Matches the JD. Async-capable, typed request/response models via Pydantic, OpenAPI for free. |
 | Persistence | SQLite + SQLAlchemy 2.0 ORM | Single-file DB is sufficient for 10k rows and keeps setup to zero. SQLAlchemy keeps the door open to Postgres without rewriting queries. |
 | Migrations | Alembic | Schema changes are versioned and replayable, which matters once the seeded database exists. |
-| Frontend | React (Vite) + TypeScript + Tailwind, with TanStack Query/Table, Recharts, and Radix primitives | Chosen over a full component kit for control over the table's server-side paging and sorting contract, and because it matches an existing dashboard the team has built and can maintain. Radix supplies accessible dropdown behaviour without imposing a visual style. |
+| Frontend | React (Vite) + TypeScript + Tailwind, with TanStack Query/Table, Recharts, and Radix primitives | Chosen over a full component kit because the directory's paging, sorting and filtering are all server-driven, and a headless table keeps that contract explicit rather than adapting a component with its own opinions about state. Radix supplies accessible dropdown and dialog behaviour without imposing a visual style. |
 | Deployment | Vercel (frontend) + Render (backend with a persistent volume for the SQLite file) | Free tiers, straightforward CI from git. |
 
 Aggregation is done in SQL, not in Python or the browser. The API returns already-computed totals so the client never holds the full dataset.
