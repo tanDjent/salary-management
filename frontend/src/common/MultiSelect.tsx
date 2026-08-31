@@ -57,7 +57,9 @@ export default function MultiSelect({
         <DropdownMenu.Content
           align="start"
           sideOffset={4}
-          className="z-50 max-h-72 min-w-[200px] overflow-y-auto rounded-md border border-gray-200 bg-white p-1 shadow-md"
+          // Matches the trigger width so the menu never appears narrower than the
+          // control that opened it, which looks broken on a full-width mobile trigger.
+          className="z-50 max-h-72 min-w-[var(--radix-dropdown-menu-trigger-width)] overflow-y-auto rounded-md border border-gray-200 bg-white p-1 shadow-md"
         >
           {selected.length > 0 && (
             <>

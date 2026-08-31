@@ -67,3 +67,28 @@ export function fetchEmployees(filters: EmployeeFilters): Promise<Page<Employee>
 export function fetchEmployee(id: number): Promise<Employee> {
   return api.get<Employee>(buildUrl(`/employees/${id}`));
 }
+
+/** Only the fields the user actually changed are sent, so a PATCH never
+ *  overwrites a value someone else edited in the meantime. */
+export type EmployeeUpdate = {
+  first_name?: string;
+  last_name?: string;
+  email?: string;
+  country_id?: number;
+  department_id?: number;
+  job_level_id?: number;
+  salary?: string;
+  hire_date?: string;
+};
+
+export function updateEmployee(
+  id: number,
+  changes: EmployeeUpdate,
+): Promise<Employee> {
+  return api.patch<Employee>(buildUrl(`/employees/${id}`), changes);
+}
+
+export function setEmployeeActive(id: number, isActive: boolean): Promise<Employee> {
+  const action = isActive ? "reactivate" : "deactivate";
+  return api.post<Employee>(buildUrl(`/employees/${id}/${action}`));
+}

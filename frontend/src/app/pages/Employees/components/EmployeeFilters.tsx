@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Search, X } from "lucide-react";
 
 import MultiSelect from "../../../../common/MultiSelect";
+import SingleSelect from "../../../../common/SingleSelect";
 import Button from "../../../../common/Button";
 import { debounce } from "../../../../common/Utility";
 import type { Lookups } from "../../../../api/lookups";
@@ -20,7 +21,7 @@ type EmployeeFiltersProps = {
 };
 
 const STATUS_OPTIONS: { value: StatusFilter; label: string }[] = [
-  { value: "all", label: "All" },
+  { value: "all", label: "All statuses" },
   { value: "active", label: "Active" },
   { value: "inactive", label: "Inactive" },
 ];
@@ -104,24 +105,13 @@ export default function EmployeeFilters({
         onChange={(ids) => onChange({ job_level_id: ids })}
       />
 
-      <div className="inline-flex rounded-md border border-gray-300 bg-white p-0.5 shadow-sm">
-        {STATUS_OPTIONS.map((option) => (
-          <button
-            key={option.value}
-            type="button"
-            onClick={() =>
-              onChange({ status: option.value === "all" ? undefined : option.value })
-            }
-            className={`rounded px-3 py-1.5 text-sm transition ${
-              status === option.value
-                ? "bg-violet-600 font-medium text-white"
-                : "text-gray-600 hover:bg-gray-100"
-            }`}
-          >
-            {option.label}
-          </button>
-        ))}
-      </div>
+      <SingleSelect
+        label="Status"
+        options={STATUS_OPTIONS}
+        value={status}
+        defaultValue="all"
+        onChange={(next) => onChange({ status: next === "all" ? undefined : next })}
+      />
 
       {activeFilterCount > 0 && (
         <Button variant="ghost" size="sm" onClick={onClear}>

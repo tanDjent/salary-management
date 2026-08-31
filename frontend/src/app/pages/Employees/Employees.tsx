@@ -1,18 +1,31 @@
-import { useMemo } from "react";
-import { useQuery, keepPreviousData } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { createColumnHelper } from "@tanstack/react-table";
+import { Pencil, UserCheck, UserMinus } from "lucide-react";
 
 import DataTable from "../../../common/DataTable";
 import Pagination from "../../../common/Pagination";
+import ConfirmDialog from "../../../common/ConfirmDialog";
 import EmployeeFilters from "./components/EmployeeFilters";
+import EditEmployeeModal from "./components/EditEmployeeModal";
 import { PAGE_SIZE, useEmployeeFilters } from "./hooks/useEmployeeFilters";
-import { fetchEmployees, type Employee } from "../../../api/employees";
+import {
+  fetchEmployees,
+  setEmployeeActive,
+  type Employee,
+} from "../../../api/employees";
 import { fetchLookups } from "../../../api/lookups";
 import { formatDate, formatMoney, formatUsd } from "../../../common/format";
+import { useToast } from "../../../common/toast/useToast";
 
 const columnHelper = createColumnHelper<Employee>();
 
-const SORTABLE_COLUMNS = new Set(["last_name", "hire_date", "salary_usd"]);
+const SORTABLE_COLUMNS = new Set(["first_name", "hire_date", "salary_usd"]);
 
 export default function Employees() {
   const {
@@ -30,6 +43,29 @@ export default function Employees() {
     toggleSort,
     clearAll,
   } = useEmployeeFilters();
+
+  const [editing, setEditing] = useState<Employee | null>(null);
+  const [changingStatus, setChangingStatus] = useState<Employee | null>(null);
+  const { showToast } = useToast();
+  const queryClient = useQueryClient();
+
+  const statusMutation = useMutation({
+    mutationFn: (employee: Employee) =>
+      setEmployeeActive(employee.id, !employee.is_active),
+    onSuccess: (updated) => {
+      queryClient.invalidateQueries({ queryKey: ["employees"] });
+      showToast(
+        `${updated.first_name} ${updated.last_name} is now ${
+          updated.is_active ? "active" : "inactive"
+        }.`,
+      );
+      setChangingStatus(null);
+    },
+    onError: (error: Error) => {
+      showToast(error.message, "error");
+      setChangingStatus(null);
+    },
+  });
 
   const { data: lookups } = useQuery({
     queryKey: ["lookups"],
@@ -49,7 +85,7 @@ export default function Employees() {
   const columns = useMemo(
     () => [
       columnHelper.accessor((row) => `${row.first_name} ${row.last_name}`, {
-        id: "last_name",
+        id: "first_name",
         header: "Name",
         cell: (info) => (
           <div className="flex flex-col">
@@ -77,7 +113,7 @@ export default function Employees() {
           const { salary } = info.row.original;
           const isBaseCurrency = salary.currency === "USD";
           return (
-            <div className="flex flex-col text-right tabular-nums">
+            <div className="flex flex-col tabular-nums">
               <span className="font-medium text-gray-900">
                 {formatMoney(salary.amount, salary.currency)}
               </span>
@@ -112,6 +148,45 @@ export default function Employees() {
               Inactive
             </span>
           ),
+      }),
+      columnHelper.display({
+        id: "edit",
+        header: "",
+        cell: (info) => (
+          <button
+            type="button"
+            title="Edit employee"
+            aria-label={`Edit ${info.row.original.first_name} ${info.row.original.last_name}`}
+            onClick={() => setEditing(info.row.original)}
+            className="rounded p-1.5 text-gray-400 transition hover:bg-violet-50 hover:text-violet-700"
+          >
+            <Pencil size={16} />
+          </button>
+        ),
+      }),
+      columnHelper.display({
+        id: "status_action",
+        header: "",
+        cell: (info) => {
+          const employee = info.row.original;
+          const label = employee.is_active ? "Deactivate" : "Reactivate";
+          const Icon = employee.is_active ? UserMinus : UserCheck;
+          return (
+            <button
+              type="button"
+              title={`${label} employee`}
+              aria-label={`${label} ${employee.first_name} ${employee.last_name}`}
+              onClick={() => setChangingStatus(employee)}
+              className={`rounded p-1.5 text-gray-400 transition ${
+                employee.is_active
+                  ? "hover:bg-red-50 hover:text-red-600"
+                  : "hover:bg-green-50 hover:text-green-700"
+              }`}
+            >
+              <Icon size={16} />
+            </button>
+          );
+        },
       }),
     ],
     [],
@@ -171,6 +246,28 @@ export default function Employees() {
           </>
         )}
       </div>
+
+      <EditEmployeeModal
+        employee={editing}
+        lookups={lookups}
+        onClose={() => setEditing(null)}
+      />
+
+      <ConfirmDialog
+        open={changingStatus !== null}
+        onOpenChange={(open) => !open && setChangingStatus(null)}
+        title={
+          changingStatus?.is_active ? "Deactivate employee?" : "Reactivate employee?"
+        }
+        message={
+          changingStatus?.is_active
+            ? `${changingStatus.first_name} ${changingStatus.last_name} will be excluded from active headcount and pay reporting. Their record is kept, and you can reactivate them at any time.`
+            : `${changingStatus?.first_name} ${changingStatus?.last_name} will be included in active headcount and pay reporting again.`
+        }
+        confirmLabel={changingStatus?.is_active ? "Deactivate" : "Reactivate"}
+        isPending={statusMutation.isPending}
+        onConfirm={() => changingStatus && statusMutation.mutate(changingStatus)}
+      />
     </div>
   );
 }

@@ -70,17 +70,22 @@ export function useEmployeeFilters() {
     [searchParams, setSearchParams],
   );
 
-  /** Click a column: sort ascending, then descending, then back to the default. */
+  /**
+   * Click a new column to sort it ascending; click the active column to flip it.
+   *
+   * There is deliberately no third "unsorted" state. A list always comes back in
+   * some order, so clearing the sort just falls back to hire_date descending —
+   * which is indistinguishable from sorting by hire_date descending. That made
+   * the default column appear unresponsive: its first click reset to a state it
+   * was already in.
+   */
   const toggleSort = useCallback(
     (field: string) => {
       const nextField = field as EmployeeSortField;
-      if (sortBy !== nextField) {
-        update({ sort_by: nextField, sort_dir: "asc" }, false);
-      } else if (sortDir === "asc") {
-        update({ sort_by: nextField, sort_dir: "desc" }, false);
-      } else {
-        update({ sort_by: undefined, sort_dir: undefined }, false);
-      }
+      const nextDir: SortDirection =
+        sortBy === nextField && sortDir === "asc" ? "desc" : "asc";
+
+      update({ sort_by: nextField, sort_dir: nextDir }, false);
     },
     [sortBy, sortDir, update],
   );
