@@ -2,7 +2,14 @@ from datetime import date
 from decimal import Decimal
 from enum import Enum
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    EmailStr,
+    Field,
+    field_validator,
+    model_validator,
+)
 
 from app.models import Employee
 
@@ -67,6 +74,60 @@ class EmployeeOut(BaseModel):
             hire_date=employee.hire_date,
             is_active=employee.is_active,
         )
+
+
+class EmployeeCreate(BaseModel):
+    """Note there is no currency field: it is derived from the country, so the two
+    can never contradict each other."""
+
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    first_name: str = Field(min_length=1, max_length=64)
+    last_name: str = Field(min_length=1, max_length=64)
+    email: EmailStr
+    country_id: int
+    department_id: int
+    job_level_id: int
+    salary: Decimal = Field(ge=0, description="Amount in the country's currency")
+    hire_date: date
+
+    @field_validator("salary")
+    @classmethod
+    def reject_excessive_precision(cls, value: Decimal) -> Decimal:
+        """Guards against a client sending more decimals than the currency has.
+
+        The currency is not known at this point, so this only catches the absurd;
+        the exact check happens in the service, where the country is resolved.
+        """
+        if value.as_tuple().exponent < -4:
+            raise ValueError("salary has too many decimal places")
+        return value
+
+
+class EmployeeUpdate(BaseModel):
+    """Every field optional: absent means "leave unchanged", which is what makes
+    this a PATCH rather than a PUT."""
+
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    first_name: str | None = Field(default=None, min_length=1, max_length=64)
+    last_name: str | None = Field(default=None, min_length=1, max_length=64)
+    email: EmailStr | None = None
+    country_id: int | None = None
+    department_id: int | None = None
+    job_level_id: int | None = None
+    salary: Decimal | None = Field(default=None, ge=0)
+    hire_date: date | None = None
+
+    @model_validator(mode="after")
+    def require_salary_when_country_changes(self) -> "EmployeeUpdate":
+        """A country change also changes the currency, so the existing figure would
+        silently come to mean a different amount. Demand an explicit new salary."""
+        if self.country_id is not None and self.salary is None:
+            raise ValueError(
+                "changing country changes the pay currency; provide a salary as well"
+            )
+        return self
 
 
 class EmployeeSortField(str, Enum):
