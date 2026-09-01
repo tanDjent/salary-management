@@ -20,7 +20,7 @@ Two things must be true for the MVP to be considered successful:
 | Migrations | Alembic | Schema changes are versioned and replayable, which matters once the seeded database exists. |
 | Frontend | React (Vite) + TypeScript + Tailwind, with TanStack Query/Table, Recharts, and Radix primitives | Chosen over a full component kit because the directory's paging, sorting and filtering are all server-driven, and a headless table keeps that contract explicit rather than adapting a component with its own opinions about state. Radix supplies accessible dropdown and dialog behaviour without imposing a visual style. |
 | Deployment | Vercel (frontend) + Render (backend), both from git | Free tiers, straightforward deploys from git. The backend runs migrations and seeds on start; the free plan's disk is ephemeral, so each deploy returns the dataset to its deterministic seeded state. `render.yaml` shows how to attach a disk if writes need to survive deploys. |
-| CI | GitHub Actions | Runs the test suite, checks migrations apply and roll back on an empty database, and asserts the models have not drifted from the migration history — which the suite alone would miss, since it builds its schema with `create_all`. |
+| CI | GitHub Actions | Runs both test suites, checks migrations apply and roll back on an empty database, and asserts the models have not drifted from the migration history — which the suite alone would miss, since it builds its schema with `create_all`. A separate job installs only the runtime requirements and runs the deploy's own migrate-and-seed sequence, because the test job installs a superset and so cannot catch a production import declared as a dev dependency. |
 
 Aggregation is done in SQL, not in Python or the browser. The API returns already-computed totals so the client never holds the full dataset.
 
@@ -75,12 +75,18 @@ Notes on the deliberate choices:
 - Filterable by country, department, and job level, using the same predicates as the directory. Deliberately no search box, since a dashboard answers "how do we pay this group" rather than "find this person", and no status filter, since the figures are always about people currently being paid.
 - Every figure is aggregated in SQL and returned already reduced, in a fixed four queries regardless of headcount. Median is computed with a window function, since SQLite has no percentile aggregate.
 
+**Application shell**
+- Filter, sort, and pagination state lives in the URL rather than component state, so a view is shareable and bookmarkable, survives a refresh, and makes the back button behave as expected.
+- Unknown paths render a not-found page inside the layout, keeping the navigation available. The host rewrites every path to the SPA shell so deep links survive a refresh, which means a mistyped address reaches the router rather than a host 404.
+
 **Seeding**
 - A script that generates 10 000 deterministic synthetic employees spread across the seeded countries, departments, and job levels, with salaries in their local currencies.
 
 **Testing**
 - Unit tests for currency normalization, median calculation, and validation rules.
-- API-level tests for directory querying (pagination, filtering, sorting) and CRUD, against an in-memory SQLite database so they stay fast and deterministic.
+- API-level tests for directory querying (pagination, filtering, sorting) and CRUD, against an in-memory SQLite database so they stay fast and deterministic. Written against behaviour through the endpoint rather than against service internals, so refactoring the layers underneath does not break them.
+- Frontend tests for the logic that can be wrong independently of the API: display formatting, the URL-backed filter state, and the employee form's validation and country/currency coupling. Components are driven through the DOM with only the network stubbed.
+- Where arithmetic is easy to get subtly wrong — median, minor-unit scaling — the expected value is computed independently rather than copied from the implementation. Several tests were confirmed by mutation: breaking the code deliberately and checking the suite went red.
 
 ## 5. Explicitly Out of Scope
 
