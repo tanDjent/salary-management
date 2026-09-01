@@ -4,6 +4,7 @@ import { createColumnHelper } from "@tanstack/react-table";
 import { Pencil, Plus, UserCheck, UserMinus } from "lucide-react";
 
 import Button from "../../../common/Button";
+import PageHeader from "../../../common/PageHeader";
 import DataTable from "../../../common/DataTable";
 import Pagination from "../../../common/Pagination";
 import EmployeeFilters from "./components/EmployeeFilters";
@@ -198,21 +199,22 @@ export default function Employees() {
 
   return (
     <div className="flex flex-col">
-      <div className="mb-4 flex items-center justify-between gap-4">
-        <div>
-          <h1 className="text-lg font-semibold text-gray-900">Employees</h1>
-          <p className="text-sm text-gray-500">
-            {data ? `${formatNumber(data.total)} matching` : "Loading…"}
-          </p>
-        </div>
-
-        {/* Disabled until lookups arrive, since the form needs them to offer a
-            country, department and level to pick from. */}
-        <Button onClick={() => setIsAdding(true)} disabled={!lookups}>
-          <Plus size={16} />
-          Add employee
-        </Button>
-      </div>
+      <PageHeader
+        title="Employees"
+        subtitle={
+          data
+            ? `${formatNumber(data.total)} ${data.total === 1 ? "employee" : "employees"}`
+            : undefined
+        }
+        actions={
+          // Disabled until lookups arrive, since the form needs them to offer a
+          // country, department and level to pick from.
+          <Button onClick={() => setIsAdding(true)} disabled={!lookups}>
+            <Plus size={16} />
+            Add employee
+          </Button>
+        }
+      />
 
       <EmployeeFilters
         lookups={lookups}
