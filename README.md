@@ -65,7 +65,7 @@ builds, where the two halves sit on different origins — see
 ## Tests
 
 ```bash
-cd backend  && pytest                              # 163 tests, ~4s
+cd backend  && pytest                              # 171 tests, ~4s
 cd frontend && npm test                            # 59 tests, ~2s
 cd frontend && npm run lint && npm run build       # lint and typecheck
 ```
