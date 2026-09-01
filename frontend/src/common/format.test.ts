@@ -40,11 +40,21 @@ describe("formatUsdCompact", () => {
 
   it("leaves small figures legible rather than rounding them to nothing", () => {
     expect(formatUsdCompact("84731.19")).toBe("$84.7K");
-    expect(formatUsdCompact("0")).toBe("$0");
   });
 
   it("crosses into billions rather than reporting four-figure millions", () => {
     expect(formatUsdCompact("2500000000")).toBe("$2.5B");
+  });
+
+  it("shows an empty result as $0, not $0.0", () => {
+    // A filter matching nobody renders this. ICU versions disagree on the
+    // default minimum for compact notation, so the option is set explicitly and
+    // this pins it — the assertion failed on Node 22 while passing on 24.
+    expect(formatUsdCompact("0")).toBe("$0");
+  });
+
+  it("drops the empty decimal from a round figure", () => {
+    expect(formatUsdCompact("1000000")).toBe("$1M");
   });
 });
 

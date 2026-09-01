@@ -18,7 +18,10 @@ running record of the decisions as they were made.
 
 ## Running it locally
 
-You need Python 3.13 and Node 20+. The two halves run as separate processes.
+You need Python 3.13 and Node 22 (see [`.nvmrc`](frontend/.nvmrc)). Both are pinned to match CI
+and the deployed environments — `Intl` output varies between Node releases, so an unpinned
+version means formatting assertions can pass locally and fail in CI. The suite is verified on 22
+and 24. The two halves run as separate processes.
 
 ### Backend
 

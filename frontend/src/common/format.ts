@@ -35,6 +35,11 @@ const COMPACT_USD = new Intl.NumberFormat("en-US", {
   style: "currency",
   currency: "USD",
   notation: "compact",
+  // Explicit rather than defaulted: ICU versions disagree on the minimum for
+  // compact notation, so leaving it out renders zero as "$0" on one Node
+  // release and "$0.0" on another. It also drops the empty decimal from a round
+  // figure, so a million reads "$1M".
+  minimumFractionDigits: 0,
   maximumFractionDigits: 1,
 });
 
