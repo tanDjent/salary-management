@@ -13,7 +13,7 @@ in that department".
 from sqlalchemy import Select, func, not_, or_
 
 from app.models import Employee
-from app.services.employment import active_predicate
+from app.services.employment import active_predicate, leaving_predicate
 
 
 def apply_employee_filters(
@@ -24,6 +24,7 @@ def apply_employee_filters(
     department_id: list[int] | None = None,
     job_level_id: list[int] | None = None,
     is_active: bool | None = None,
+    is_leaving: bool | None = None,
 ) -> Select:
     if q:
         # SQLite's LIKE is case-insensitive for ASCII by default; lower() makes that
@@ -46,5 +47,10 @@ def apply_employee_filters(
     if is_active is not None:
         active = active_predicate()
         stmt = stmt.where(active if is_active else not_(active))
+    if is_leaving is not None:
+        # Narrows within the active population rather than replacing it, so
+        # is_active=true combined with is_leaving=true stays consistent.
+        leaving = leaving_predicate()
+        stmt = stmt.where(leaving if is_leaving else not_(leaving))
 
     return stmt

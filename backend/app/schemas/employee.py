@@ -174,6 +174,9 @@ class EmployeeListParams(BaseModel):
     job_level_id: list[int] = Field(default_factory=list)
     # Unset means every employee; the UI chooses its own default.
     is_active: bool | None = None
+    # Narrows to people serving notice. A subset of active, so it combines with
+    # is_active rather than contradicting it.
+    is_leaving: bool | None = None
 
     sort_by: EmployeeSortField = EmployeeSortField.HIRE_DATE
     sort_dir: SortDirection = SortDirection.DESC

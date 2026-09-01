@@ -32,6 +32,7 @@ def _apply_filters(stmt: Select, params: EmployeeListParams) -> Select:
         department_id=params.department_id,
         job_level_id=params.job_level_id,
         is_active=params.is_active,
+        is_leaving=params.is_leaving,
     )
 
 

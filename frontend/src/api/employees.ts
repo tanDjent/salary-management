@@ -59,6 +59,8 @@ export type EmployeeFilters = {
   department_id?: number[];
   job_level_id?: number[];
   is_active?: boolean;
+  /** Narrows to people serving notice; a subset of active, not a sibling of it. */
+  is_leaving?: boolean;
   sort_by: EmployeeSortField;
   sort_dir: SortDirection;
 };

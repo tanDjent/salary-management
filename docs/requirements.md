@@ -48,7 +48,7 @@ Notes on the deliberate choices:
 
 **Employee Directory**
 - Server-side pagination, sorting, and search over 10,000 records. Search matches name and email.
-- Filters on country, department, job level, and active/inactive status. Multiple values within one filter are OR-matched; different filters are AND-matched.
+- Filters on country, department, job level, and status (all / active / leaving soon / inactive). Leaving soon narrows within active rather than sitting beside it, since those employees are still employed. Multiple values within one filter are OR-matched; different filters are AND-matched.
 - Sorting by salary orders on the USD-normalized value, since comparing raw local amounts would rank ₹5,000,000 above $200,000.
 - Indexes on the filter and sort columns so queries stay fast at full dataset size.
 
@@ -67,6 +67,7 @@ Notes on the deliberate choices:
   - Average salary
   - Median salary — shown alongside the average because pay is right-skewed. In the seeded data the mean sits 1.17x the median, so the two answer different questions: what the org spends per head, versus what a typical person earns.
   - Leaving soon — active employees with a departure already scheduled
+- The headcount and leaving-soon cards link through to the directory, carrying the dashboard's filters, so a count can always be resolved into the people it counts.
 - Breakdowns, each showing total payroll spend, headcount, and average salary, ranked by spend:
   - By country
   - By department

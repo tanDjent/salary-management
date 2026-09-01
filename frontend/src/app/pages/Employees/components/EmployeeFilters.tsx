@@ -23,6 +23,7 @@ type EmployeeFiltersProps = {
 const STATUS_OPTIONS: { value: StatusFilter; label: string }[] = [
   { value: "all", label: "All statuses" },
   { value: "active", label: "Active" },
+  { value: "leaving", label: "Leaving soon" },
   { value: "inactive", label: "Inactive" },
 ];
 

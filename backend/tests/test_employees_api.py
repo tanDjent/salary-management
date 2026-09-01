@@ -1,8 +1,10 @@
+from datetime import date
 from decimal import Decimal
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.models import Country, Department, Employee, JobLevel
+from app.services.employment import leaving_predicate
 
 LIST_URL = "/api/employees"
 
@@ -155,6 +157,47 @@ class TestFiltering:
         body = client.get(LIST_URL, params={"is_active": False}).json()
 
         assert body["total"] < 200
+
+    def test_filters_to_leaving_soon(self, client, seeded_db):
+        """The dashboard's 'Leaving soon' card has to be reachable as a list."""
+        expected = seeded_db.scalar(
+            select(func.count(Employee.id)).where(leaving_predicate())
+        )
+
+        body = client.get(LIST_URL, params={"is_leaving": True, "page_size": 100}).json()
+
+        assert body["total"] == expected
+        assert all(item["is_leaving"] for item in body["items"])
+
+    def test_leaving_soon_are_still_active(self, client):
+        """Leaving is a subset of active, not a fourth state beside it."""
+        body = client.get(LIST_URL, params={"is_leaving": True, "page_size": 100}).json()
+
+        assert body["total"] > 0
+        assert all(item["is_active"] for item in body["items"])
+
+    def test_leaving_soon_agrees_with_the_dashboard_card(self, client):
+        """Two code paths, one number. If they disagree, one of them is lying."""
+        card = client.get("/api/analytics").json()["totals"]["leaving_soon"]
+        listed = client.get(LIST_URL, params={"is_leaving": True}).json()["total"]
+
+        assert listed == card
+
+    def test_departed_employees_are_not_leaving(self, client):
+        """Someone whose exit date has passed has left; they are not 'leaving'."""
+        body = client.get(LIST_URL, params={"is_leaving": True, "page_size": 100}).json()
+
+        today = date.today().isoformat()
+        assert all(item["exit_date"] > today for item in body["items"])
+
+    def test_excluding_leavers_leaves_everyone_else(self, client):
+        active = client.get(LIST_URL, params={"is_active": True}).json()["total"]
+        leaving = client.get(LIST_URL, params={"is_leaving": True}).json()["total"]
+        staying = client.get(
+            LIST_URL, params={"is_active": True, "is_leaving": False}
+        ).json()["total"]
+
+        assert staying == active - leaving
 
 
 class TestSearch:

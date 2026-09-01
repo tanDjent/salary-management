@@ -40,6 +40,17 @@ export default function Dashboard() {
 
   const totals = data?.totals;
 
+  /** Link to the same population in the directory. The dashboard's filters are
+   *  carried over, so clicking a card that reads 16 shows those 16 rather than
+   *  quietly widening to the whole org. */
+  const directoryLink = (status: string) => {
+    const params = new URLSearchParams({ status });
+    countryIds.forEach((id) => params.append("country_id", String(id)));
+    departmentIds.forEach((id) => params.append("department_id", String(id)));
+    jobLevelIds.forEach((id) => params.append("job_level_id", String(id)));
+    return `/employees?${params}`;
+  };
+
   if (isError) {
     return (
       <div className="flex flex-col">
@@ -88,6 +99,7 @@ export default function Dashboard() {
             label="Headcount"
             value={totals ? formatNumber(totals.headcount) : null}
             hint="Currently employed"
+            to={directoryLink("active")}
             isLoading={isLoading}
           />
           <KpiCard
@@ -112,6 +124,7 @@ export default function Dashboard() {
             label="Leaving soon"
             value={totals ? formatNumber(totals.leaving_soon) : null}
             hint="Departures already scheduled"
+            to={directoryLink("leaving")}
             isLoading={isLoading}
           />
         </div>

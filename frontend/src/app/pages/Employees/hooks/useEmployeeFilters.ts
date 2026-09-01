@@ -16,7 +16,29 @@ const SORT_FIELDS: EmployeeSortField[] = [
   "salary_usd",
 ];
 
-export type StatusFilter = "all" | "active" | "inactive";
+/** "leaving" is a subset of "active" rather than a fourth state: those people are
+ *  still employed, just with a departure already scheduled. */
+export type StatusFilter = "all" | "active" | "leaving" | "inactive";
+
+const STATUS_FILTERS: StatusFilter[] = ["all", "active", "leaving", "inactive"];
+
+/** Maps the single-select the UI offers onto the two independent flags the API
+ *  takes, since leaving narrows within active rather than replacing it. */
+function statusToParams(status: StatusFilter): {
+  is_active?: boolean;
+  is_leaving?: boolean;
+} {
+  switch (status) {
+    case "active":
+      return { is_active: true };
+    case "leaving":
+      return { is_leaving: true };
+    case "inactive":
+      return { is_active: false };
+    default:
+      return {};
+  }
+}
 
 /**
  * Filter state lives in the URL rather than React state.
@@ -38,7 +60,9 @@ export function useEmployeeFilters() {
 
   const page = Math.max(1, Number(searchParams.get("page")) || 1);
   const q = searchParams.get("q") ?? "";
-  const status = (searchParams.get("status") as StatusFilter) ?? "all";
+  const rawStatus = searchParams.get("status") as StatusFilter | null;
+  const status: StatusFilter =
+    rawStatus && STATUS_FILTERS.includes(rawStatus) ? rawStatus : "all";
 
   const rawSortBy = searchParams.get("sort_by") as EmployeeSortField | null;
   const sortBy: EmployeeSortField =
@@ -98,7 +122,7 @@ export function useEmployeeFilters() {
       country_id: countryIds.length ? countryIds : undefined,
       department_id: departmentIds.length ? departmentIds : undefined,
       job_level_id: jobLevelIds.length ? jobLevelIds : undefined,
-      is_active: status === "all" ? undefined : status === "active",
+      ...statusToParams(status),
       sort_by: sortBy,
       sort_dir: sortDir,
     }),

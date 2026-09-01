@@ -10,7 +10,7 @@ the badge shown on each row can never disagree.
 
 from datetime import date
 
-from sqlalchemy import ColumnElement, or_
+from sqlalchemy import ColumnElement, and_, or_
 
 from app.models import Employee
 
@@ -39,3 +39,14 @@ def is_leaving(exit_date: date | None, as_of: date | None = None) -> bool:
 def active_predicate(as_of: date | None = None) -> ColumnElement[bool]:
     """SQL form of `is_active`, for filtering and aggregation."""
     return or_(Employee.exit_date.is_(None), Employee.exit_date > (as_of or today()))
+
+
+def leaving_predicate(as_of: date | None = None) -> ColumnElement[bool]:
+    """SQL form of `is_leaving`: an exit date is set and has not arrived yet.
+
+    A subset of `active_predicate`, not a sibling of it — someone serving notice
+    is still employed.
+    """
+    return and_(
+        Employee.exit_date.is_not(None), Employee.exit_date > (as_of or today())
+    )
