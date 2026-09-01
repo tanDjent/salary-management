@@ -62,11 +62,13 @@ builds, where the two halves sit on different origins — see
 ## Tests
 
 ```bash
-cd backend && pytest              # 163 tests, ~4s
-cd frontend && npm run lint && npm run build
+cd backend  && pytest                              # 163 tests, ~4s
+cd frontend && npm test                            # 59 tests, ~2s
+cd frontend && npm run lint && npm run build       # lint and typecheck
 ```
 
-The backend suite runs against in-memory SQLite, so it needs no setup and no running server.
+The backend suite runs against in-memory SQLite, so it needs no setup and no running server. The
+frontend suite is Vitest with Testing Library, and stubs only the network.
 
 Tests are written against behaviour through the API rather than against service internals, which
 means the endpoint, the query, and the serialization are all covered by one assertion and
@@ -77,10 +79,19 @@ queries regardless of headcount. Where the arithmetic is easy to get subtly wron
 minor-unit scaling — the expected value is computed independently in Python rather than copied
 from the implementation.
 
-Two of them were confirmed by mutation: deliberately breaking the median calculation and the
-`is_active` derivation, and checking the suite went red. The median test earned its place that
-way — it caught a real bug where SQLAlchemy's `/` produced float division in a window function
-that needed integer division.
+On the frontend the same principle picks the targets: the formatters, where a currency with no
+minor unit or a timezone west of Greenwich changes the answer; the filter hook, where one
+dropdown maps onto two independent API flags; and the employee form, where changing someone's
+country changes the currency their salary is denominated in. Components are driven through the
+DOM the way a user drives them, with only the network stubbed, so the assertions survive
+refactoring the internals.
+
+Several tests were confirmed by mutation rather than assumed to work — breaking the median
+calculation, the `is_active` derivation, the salary-clearing on relocation, the status mapping,
+and the timezone handling in `todayIso`, then checking the suite went red for each. Two earned
+their place that way: the median test caught a real bug where SQLAlchemy's `/` produced float
+division in a window function that needed integer division, and writing the form tests turned up
+a dead ternary in `formatMoney` whose branches were identical.
 
 ## How it is put together
 
@@ -145,5 +156,6 @@ declared as a dev dependency. That job exists because exactly this reached produ
 
 Honest about what a reviewer will notice. Salary edits overwrite in place — there is no change
 history, which a real system needs and which is the first thing to add. Exchange rates are static
-and unversioned. There is no authentication, per the brief. Frontend testing is limited to type
-checking and linting; the behavioural coverage is all on the API.
+and unversioned. There is no authentication, per the brief. The frontend tests cover the logic
+that can be wrong — formatting, filter state, form rules — but not the pages end to end, so a
+broken wire-up between a page and its hook would pass; there are no browser-level tests.

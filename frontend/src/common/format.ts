@@ -14,8 +14,9 @@ function currencyFormatter(currency: string): Intl.NumberFormat {
     formatter = new Intl.NumberFormat("en-US", {
       style: "currency",
       currency,
-      // Intl already knows JPY has no minor unit, so digits are left to it.
-      maximumFractionDigits: currency === "JPY" ? 0 : 0,
+      // Salaries are shown as whole units in every currency: the cents are noise
+      // in a directory, and a column of them is harder to scan down.
+      maximumFractionDigits: 0,
     });
     CURRENCY_FORMATTERS.set(currency, formatter);
   }
