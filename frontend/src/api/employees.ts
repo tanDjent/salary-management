@@ -71,6 +71,23 @@ export function fetchEmployee(id: number): Promise<Employee> {
   return api.get<Employee>(buildUrl(`/employees/${id}`));
 }
 
+/** Currency is not sent: the server derives it from the country, so the two
+ *  cannot contradict each other. */
+export type EmployeeCreate = {
+  first_name: string;
+  last_name: string;
+  email: string;
+  country_id: number;
+  department_id: number;
+  job_level_id: number;
+  salary: string;
+  hire_date: string;
+};
+
+export function createEmployee(employee: EmployeeCreate): Promise<Employee> {
+  return api.post<Employee>(buildUrl("/employees"), employee);
+}
+
 /** Only the fields the user actually changed are sent, so a PATCH never
  *  overwrites a value someone else edited in the meantime. */
 export type EmployeeUpdate = {

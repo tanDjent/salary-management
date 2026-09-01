@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import Button from "../../../../common/Button";
@@ -9,14 +9,22 @@ import FormField, {
 } from "../../../../common/FormField";
 import { useToast } from "../../../../common/toast/useToast";
 import {
+  createEmployee,
   updateEmployee,
   type Employee,
+  type EmployeeCreate,
   type EmployeeUpdate,
 } from "../../../../api/employees";
 import type { Lookups } from "../../../../api/lookups";
+import { todayIso } from "../../../../common/format";
 
-type EditEmployeeModalProps = {
-  employee: Employee | null;
+/** Creating and editing share every field, every validation rule, and the same
+ *  country/currency coupling. They differ only in where the initial values come
+ *  from and what is sent on submit, so they are one component rather than two
+ *  copies of the same form that drift apart. */
+type EmployeeFormModalProps = {
+  /** Absent means create. */
+  employee?: Employee;
   lookups: Lookups | undefined;
   onClose: () => void;
 };
@@ -50,6 +58,20 @@ function toFormState(employee: Employee): FormState {
   };
 }
 
+function blankFormState(lookups: Lookups | undefined): FormState {
+  return {
+    first_name: "",
+    last_name: "",
+    email: "",
+    country_id: lookups?.countries[0]?.id ?? 0,
+    department_id: lookups?.departments[0]?.id ?? 0,
+    job_level_id: lookups?.job_levels[0]?.id ?? 0,
+    salary: "",
+    hire_date: todayIso(),
+    exit_date: "",
+  };
+}
+
 /** Decimal places the currency actually has, so the form rejects ¥5000.55
  *  before the server has to. */
 const MINOR_UNITS: Record<string, number> = { JPY: 0 };
@@ -64,59 +86,73 @@ function decimalPlaces(value: string): number {
 function exitDateHint(exitDate: string): string {
   if (!exitDate) return "Leave empty while employed";
 
-  const now = new Date();
-  const today = new Date(now.getTime() - now.getTimezoneOffset() * 60_000)
-    .toISOString()
-    .slice(0, 10);
-
-  return exitDate > today
+  return exitDate > todayIso()
     ? "Future date — stays active until then"
     : "Marks the employee as inactive";
 }
 
-export default function EditEmployeeModal({
+export default function EmployeeFormModal({
   employee,
   lookups,
   onClose,
-}: EditEmployeeModalProps) {
-  const [form, setForm] = useState<FormState | null>(null);
+}: EmployeeFormModalProps) {
+  const isEdit = employee !== undefined;
+
+  // Mounted fresh per employee via a key in the parent, so the initial values
+  // are correct without an effect to reset them.
+  const [form, setForm] = useState<FormState>(() =>
+    employee ? toFormState(employee) : blankFormState(lookups),
+  );
   const [errors, setErrors] = useState<Errors>({});
   const { showToast } = useToast();
   const queryClient = useQueryClient();
 
-  useEffect(() => {
-    setForm(employee ? toFormState(employee) : null);
-    setErrors({});
-  }, [employee]);
-
   const selectedCountry = useMemo(
-    () => lookups?.countries.find((country) => country.id === form?.country_id),
-    [lookups, form?.country_id],
+    () => lookups?.countries.find((country) => country.id === form.country_id),
+    [lookups, form.country_id],
   );
 
-  const currency = selectedCountry?.default_currency_code ?? employee?.salary.currency ?? "USD";
-  const countryChanged = !!employee && !!form && form.country_id !== employee.country.id;
+  const currency =
+    selectedCountry?.default_currency_code ?? employee?.salary.currency ?? "USD";
+
+  // Only meaningful when editing: on create there is no previous country, so
+  // picking one is not a relocation.
+  const countryChanged = isEdit && form.country_id !== employee.country.id;
 
   const mutation = useMutation({
-    mutationFn: (changes: EmployeeUpdate) => updateEmployee(employee!.id, changes),
-    onSuccess: (updated) => {
+    mutationFn: (payload: EmployeeCreate | EmployeeUpdate) =>
+      isEdit
+        ? updateEmployee(employee.id, payload as EmployeeUpdate)
+        : createEmployee(payload as EmployeeCreate),
+    onSuccess: (saved) => {
       queryClient.invalidateQueries({ queryKey: ["employees"] });
-      showToast(`Saved changes to ${updated.first_name} ${updated.last_name}.`);
+      showToast(
+        isEdit
+          ? `Saved changes to ${saved.first_name} ${saved.last_name}.`
+          : `${saved.first_name} ${saved.last_name} has been added.`,
+      );
       onClose();
     },
-    onError: (error: Error) => showToast(error.message, "error"),
+    onError: (error: Error) => {
+      // A duplicate email is the one failure the user can act on, so it is shown
+      // against the field rather than in a toast they must remember.
+      if (/email/i.test(error.message)) {
+        setErrors((current) => ({ ...current, email: error.message }));
+        return;
+      }
+      showToast(error.message, "error");
+    },
   });
 
-  if (!employee || !form) return null;
-
   const setField = <K extends keyof FormState>(key: K, value: FormState[K]) => {
-    setForm((current) => (current ? { ...current, [key]: value } : current));
+    setForm((current) => ({ ...current, [key]: value }));
     setErrors((current) => ({ ...current, [key]: undefined }));
   };
 
   const handleCountryChange = (countryId: number) => {
     setForm((current) => {
-      if (!current) return current;
+      if (!employee) return { ...current, country_id: countryId };
+
       // A country change means a currency change, so the existing figure no
       // longer means what it says. Cleared deliberately rather than converted:
       // relocation pay is renegotiated, not passed through an exchange rate.
@@ -144,25 +180,24 @@ export default function EditEmployeeModal({
       next.exit_date = "Cannot be before the hire date";
     }
 
+    const allowedDecimals = MINOR_UNITS[currency] ?? 2;
     const salary = form.salary.trim();
     if (!salary) {
-      next.salary = countryChanged
-        ? `Enter the new salary in ${currency}`
-        : "Required";
+      next.salary = countryChanged ? `Enter the new salary in ${currency}` : "Required";
     } else if (!/^\d+(\.\d+)?$/.test(salary)) {
       next.salary = "Enter a number, without symbols or separators";
-    } else if (decimalPlaces(salary) > (MINOR_UNITS[currency] ?? 2)) {
+    } else if (decimalPlaces(salary) > allowedDecimals) {
       next.salary =
-        (MINOR_UNITS[currency] ?? 2) === 0
+        allowedDecimals === 0
           ? `${currency} has no decimal places`
-          : `${currency} supports at most ${MINOR_UNITS[currency] ?? 2} decimal places`;
+          : `${currency} supports at most ${allowedDecimals} decimal places`;
     }
 
     return next;
   };
 
   const buildChanges = (): EmployeeUpdate => {
-    const original = toFormState(employee);
+    const original = toFormState(employee!);
     const changes: EmployeeUpdate = {};
 
     (Object.keys(original) as (keyof FormState)[]).forEach((key) => {
@@ -186,12 +221,28 @@ export default function EditEmployeeModal({
     return changes;
   };
 
+  const buildNewEmployee = (): EmployeeCreate => ({
+    first_name: form.first_name.trim(),
+    last_name: form.last_name.trim(),
+    email: form.email.trim(),
+    country_id: form.country_id,
+    department_id: form.department_id,
+    job_level_id: form.job_level_id,
+    salary: form.salary.trim(),
+    hire_date: form.hire_date,
+  });
+
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
 
     const validationErrors = validate();
     if (Object.keys(validationErrors).length > 0) {
       setErrors(validationErrors);
+      return;
+    }
+
+    if (!isEdit) {
+      mutation.mutate(buildNewEmployee());
       return;
     }
 
@@ -211,26 +262,32 @@ export default function EditEmployeeModal({
     <Modal
       open
       onOpenChange={(open) => !open && onClose()}
-      title="Edit employee"
-      description={`${employee.first_name} ${employee.last_name} · ${employee.email}`}
+      title={isEdit ? "Edit employee" : "Add employee"}
+      description={
+        isEdit
+          ? `${employee.first_name} ${employee.last_name} · ${employee.email}`
+          : "Pay currency is set by the country and cannot be chosen separately."
+      }
       widthClassName="max-w-2xl"
       footer={
         <>
           <Button variant="ghost" onClick={onClose} disabled={mutation.isPending}>
             Cancel
           </Button>
-          <Button
-            type="submit"
-            form="edit-employee-form"
-            disabled={mutation.isPending}
-          >
-            {mutation.isPending ? "Saving…" : "Save changes"}
+          <Button type="submit" form="employee-form" disabled={mutation.isPending}>
+            {mutation.isPending
+              ? isEdit
+                ? "Saving…"
+                : "Adding…"
+              : isEdit
+                ? "Save changes"
+                : "Add employee"}
           </Button>
         </>
       }
     >
       <form
-        id="edit-employee-form"
+        id="employee-form"
         onSubmit={handleSubmit}
         className="grid grid-cols-1 gap-4 sm:grid-cols-2"
       >
@@ -264,11 +321,7 @@ export default function EditEmployeeModal({
           </FormField>
         </div>
 
-        <FormField
-          label="Country"
-          htmlFor="country_id"
-          hint={`Paid in ${currency}`}
-        >
+        <FormField label="Country" htmlFor="country_id" hint={`Paid in ${currency}`}>
           <select
             id="country_id"
             value={form.country_id}
@@ -347,21 +400,25 @@ export default function EditEmployeeModal({
           />
         </FormField>
 
-        <FormField
-          label="Exit date"
-          htmlFor="exit_date"
-          error={errors.exit_date}
-          hint={exitDateHint(form.exit_date)}
-        >
-          <input
-            id="exit_date"
-            type="date"
-            value={form.exit_date}
-            min={form.hire_date}
-            onChange={(e) => setField("exit_date", e.target.value)}
-            className={field("exit_date")}
-          />
-        </FormField>
+        {/* New hires are active by definition, and the create endpoint takes no
+            exit date, so the field only exists when editing. */}
+        {isEdit && (
+          <FormField
+            label="Exit date"
+            htmlFor="exit_date"
+            error={errors.exit_date}
+            hint={exitDateHint(form.exit_date)}
+          >
+            <input
+              id="exit_date"
+              type="date"
+              value={form.exit_date}
+              min={form.hire_date}
+              onChange={(e) => setField("exit_date", e.target.value)}
+              className={field("exit_date")}
+            />
+          </FormField>
+        )}
       </form>
     </Modal>
   );

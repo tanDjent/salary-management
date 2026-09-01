@@ -13,20 +13,12 @@ import {
   reactivateEmployee,
   type Employee,
 } from "../../../../api/employees";
-import { formatDate } from "../../../../common/format";
+import { formatDate, todayIso } from "../../../../common/format";
 
 type ExitDateDialogProps = {
   employee: Employee | null;
   onClose: () => void;
 };
-
-function todayIso(): string {
-  // Local calendar date, not UTC: toISOString() would show yesterday for anyone
-  // west of Greenwich late in the day.
-  const now = new Date();
-  const offsetMs = now.getTimezoneOffset() * 60_000;
-  return new Date(now.getTime() - offsetMs).toISOString().slice(0, 10);
-}
 
 export default function ExitDateDialog({ employee, onClose }: ExitDateDialogProps) {
   // Mounted fresh per employee via a key in the parent, so the initial value is

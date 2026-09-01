@@ -40,6 +40,18 @@ export function formatDate(isoDate: string): string {
   return DATE_FORMATTER.format(new Date(isoDate));
 }
 
+/** Today as YYYY-MM-DD, for date inputs and for comparing against exit dates.
+ *
+ *  Built from the local calendar date rather than toISOString(), which converts
+ *  to UTC and would report yesterday for anyone west of Greenwich late in the day.
+ */
+export function todayIso(): string {
+  const now = new Date();
+  return new Date(now.getTime() - now.getTimezoneOffset() * 60_000)
+    .toISOString()
+    .slice(0, 10);
+}
+
 const NUMBER_FORMATTER = new Intl.NumberFormat("en-US");
 
 export function formatNumber(value: number): string {

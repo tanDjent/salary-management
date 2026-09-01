@@ -1,17 +1,23 @@
 import { useMemo, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { createColumnHelper } from "@tanstack/react-table";
-import { Pencil, UserCheck, UserMinus } from "lucide-react";
+import { Pencil, Plus, UserCheck, UserMinus } from "lucide-react";
 
+import Button from "../../../common/Button";
 import DataTable from "../../../common/DataTable";
 import Pagination from "../../../common/Pagination";
 import EmployeeFilters from "./components/EmployeeFilters";
-import EditEmployeeModal from "./components/EditEmployeeModal";
+import EmployeeFormModal from "./components/EmployeeFormModal";
 import ExitDateDialog from "./components/ExitDateDialog";
 import { PAGE_SIZE, useEmployeeFilters } from "./hooks/useEmployeeFilters";
 import { fetchEmployees, type Employee } from "../../../api/employees";
 import { fetchLookups } from "../../../api/lookups";
-import { formatDate, formatMoney, formatUsd } from "../../../common/format";
+import {
+  formatDate,
+  formatMoney,
+  formatNumber,
+  formatUsd,
+} from "../../../common/format";
 
 const columnHelper = createColumnHelper<Employee>();
 
@@ -35,6 +41,7 @@ export default function Employees() {
   } = useEmployeeFilters();
 
   const [editing, setEditing] = useState<Employee | null>(null);
+  const [isAdding, setIsAdding] = useState(false);
   const [changingStatus, setChangingStatus] = useState<Employee | null>(null);
 
   const { data: lookups } = useQuery({
@@ -191,6 +198,22 @@ export default function Employees() {
 
   return (
     <div className="flex flex-col">
+      <div className="mb-4 flex items-center justify-between gap-4">
+        <div>
+          <h1 className="text-lg font-semibold text-gray-900">Employees</h1>
+          <p className="text-sm text-gray-500">
+            {data ? `${formatNumber(data.total)} matching` : "Loading…"}
+          </p>
+        </div>
+
+        {/* Disabled until lookups arrive, since the form needs them to offer a
+            country, department and level to pick from. */}
+        <Button onClick={() => setIsAdding(true)} disabled={!lookups}>
+          <Plus size={16} />
+          Add employee
+        </Button>
+      </div>
+
       <EmployeeFilters
         lookups={lookups}
         q={q}
@@ -243,11 +266,19 @@ export default function Employees() {
         )}
       </div>
 
-      <EditEmployeeModal
-        employee={editing}
-        lookups={lookups}
-        onClose={() => setEditing(null)}
-      />
+      {/* Mounted only while open, so each opening starts from the right values
+          without an effect to reset the form. */}
+      {editing && (
+        <EmployeeFormModal
+          employee={editing}
+          lookups={lookups}
+          onClose={() => setEditing(null)}
+        />
+      )}
+
+      {isAdding && (
+        <EmployeeFormModal lookups={lookups} onClose={() => setIsAdding(false)} />
+      )}
 
       <ExitDateDialog
         key={changingStatus?.id}
