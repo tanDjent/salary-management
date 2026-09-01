@@ -1,0 +1,34 @@
+services:
+  - type: web
+    name: salary-management-api
+    runtime: python
+    rootDir: backend
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    # Migrate, then seed only if the database is empty — the seed script is a
+    # no-op when employees already exist, so a restart does not wipe edits made
+    # through the UI. Run at start rather than as a pre-deploy step, which the
+    # free plan does not offer.
+    startCommand: >-
+      alembic upgrade head &&
+      python -m app.seed.run &&
+      uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      # A JSON array: pydantic-settings parses list fields as JSON, so
+      # ["https://your-app.vercel.app"] rather than a bare URL.
+      - key: CORS_ORIGINS
+        sync: false
+      - key: PYTHON_VERSION
+        value: "3.12"
+# The free plan has an ephemeral disk, so the SQLite file is rebuilt on each
+# deploy and the dataset returns to its deterministic seeded state. To keep
+# writes across deploys, attach a disk and point DATABASE_URL at it:
+#
+#   disk:
+#     name: salary-data
+#     mountPath: /var/data
+#     sizeGB: 1
+#   envVars:
+#     - key: DATABASE_URL
+#       value: sqlite:////var/data/salary.db

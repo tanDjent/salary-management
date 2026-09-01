@@ -9,7 +9,9 @@ import DataTable from "../../../common/DataTable";
 import Pagination from "../../../common/Pagination";
 import EmployeeFilters from "./components/EmployeeFilters";
 import EmployeeFormModal from "./components/EmployeeFormModal";
+import EmployeeDetail from "./components/EmployeeDetail";
 import ExitDateDialog from "./components/ExitDateDialog";
+import StatusBadge from "./components/StatusBadge";
 import { PAGE_SIZE, useEmployeeFilters } from "./hooks/useEmployeeFilters";
 import { fetchEmployees, type Employee } from "../../../api/employees";
 import { fetchLookups } from "../../../api/lookups";
@@ -41,6 +43,7 @@ export default function Employees() {
     clearAll,
   } = useEmployeeFilters();
 
+  const [viewing, setViewing] = useState<Employee | null>(null);
   const [editing, setEditing] = useState<Employee | null>(null);
   const [isAdding, setIsAdding] = useState(false);
   const [changingStatus, setChangingStatus] = useState<Employee | null>(null);
@@ -116,39 +119,7 @@ export default function Employees() {
       columnHelper.accessor("is_active", {
         id: "is_active",
         header: "Status",
-        cell: (info) => {
-          const { is_active, is_leaving, exit_date } = info.row.original;
-
-          // Three states, not two: someone serving notice is still active and
-          // still paid, but HR needs to see the departure coming.
-          if (is_leaving) {
-            return (
-              <span
-                title={`Leaving on ${formatDate(exit_date!)}`}
-                className="inline-flex whitespace-nowrap rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700"
-              >
-                Leaving {formatDate(exit_date!)}
-              </span>
-            );
-          }
-
-          if (is_active) {
-            return (
-              <span className="inline-flex rounded-full bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700">
-                Active
-              </span>
-            );
-          }
-
-          return (
-            <span
-              title={exit_date ? `Left on ${formatDate(exit_date)}` : undefined}
-              className="inline-flex rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600"
-            >
-              Inactive
-            </span>
-          );
-        },
+        cell: (info) => <StatusBadge employee={info.row.original} />,
       }),
       columnHelper.display({
         id: "edit",
@@ -158,7 +129,12 @@ export default function Employees() {
             type="button"
             title="Edit employee"
             aria-label={`Edit ${info.row.original.first_name} ${info.row.original.last_name}`}
-            onClick={() => setEditing(info.row.original)}
+            // The row opens the detail panel, so row actions must not also
+            // trigger it.
+            onClick={(event) => {
+              event.stopPropagation();
+              setEditing(info.row.original);
+            }}
             className="rounded p-1.5 text-gray-400 transition hover:bg-violet-50 hover:text-violet-700"
           >
             <Pencil size={16} />
@@ -181,7 +157,10 @@ export default function Employees() {
               type="button"
               title={isReinstating ? "Reinstate employee" : "Record departure"}
               aria-label={`${label} ${employee.first_name} ${employee.last_name}`}
-              onClick={() => setChangingStatus(employee)}
+              onClick={(event) => {
+                event.stopPropagation();
+                setChangingStatus(employee);
+              }}
               className={`rounded p-1.5 text-gray-400 transition ${
                 isReinstating
                   ? "hover:bg-green-50 hover:text-green-700"
@@ -245,6 +224,7 @@ export default function Employees() {
                 data={data?.items}
                 columns={columns}
                 isLoading={isLoading}
+                onRowClick={setViewing}
                 sortableColumns={SORTABLE_COLUMNS}
                 sortBy={sortBy}
                 sortOrder={sortDir}
@@ -267,6 +247,23 @@ export default function Employees() {
           </>
         )}
       </div>
+
+      {viewing && (
+        <EmployeeDetail
+          employee={viewing}
+          onClose={() => setViewing(null)}
+          // Acting from the detail panel closes it, so the result of the action
+          // is visible in the table underneath rather than behind a stale panel.
+          onEdit={(employee) => {
+            setViewing(null);
+            setEditing(employee);
+          }}
+          onChangeStatus={(employee) => {
+            setViewing(null);
+            setChangingStatus(employee);
+          }}
+        />
+      )}
 
       {/* Mounted only while open, so each opening starts from the right values
           without an effect to reset the form. */}

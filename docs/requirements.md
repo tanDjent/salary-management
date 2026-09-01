@@ -19,7 +19,8 @@ Two things must be true for the MVP to be considered successful:
 | Persistence | SQLite + SQLAlchemy 2.0 ORM | Single-file DB is sufficient for 10k rows and keeps setup to zero. SQLAlchemy keeps the door open to Postgres without rewriting queries. |
 | Migrations | Alembic | Schema changes are versioned and replayable, which matters once the seeded database exists. |
 | Frontend | React (Vite) + TypeScript + Tailwind, with TanStack Query/Table, Recharts, and Radix primitives | Chosen over a full component kit because the directory's paging, sorting and filtering are all server-driven, and a headless table keeps that contract explicit rather than adapting a component with its own opinions about state. Radix supplies accessible dropdown and dialog behaviour without imposing a visual style. |
-| Deployment | Vercel (frontend) + Render (backend with a persistent volume for the SQLite file) | Free tiers, straightforward CI from git. |
+| Deployment | Vercel (frontend) + Render (backend), both from git | Free tiers, straightforward deploys from git. The backend runs migrations and seeds on start; the free plan's disk is ephemeral, so each deploy returns the dataset to its deterministic seeded state. `render.yaml` shows how to attach a disk if writes need to survive deploys. |
+| CI | GitHub Actions | Runs the test suite, checks migrations apply and roll back on an empty database, and asserts the models have not drifted from the migration history — which the suite alone would miss, since it builds its schema with `create_all`. |
 
 Aggregation is done in SQL, not in Python or the browser. The API returns already-computed totals so the client never holds the full dataset.
 
@@ -53,7 +54,7 @@ Notes on the deliberate choices:
 - Indexes on the filter and sort columns so queries stay fast at full dataset size.
 
 **Employee CRUD**
-- View a single employee's detail.
+- View a single employee's detail: clicking a row opens a panel with the full record, including both the local and USD salary, and the actions available on that person.
 - Add a new employee.
 - Edit an employee (PATCH: only the fields sent are changed).
 - Record a departure by setting an exit date, defaulting to today; a future date schedules it. Reinstating clears the date and also cancels a scheduled departure. Exit dates before the hire date are rejected.
