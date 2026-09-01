@@ -30,6 +30,19 @@ export function formatUsd(amount: string): string {
   return currencyFormatter("USD").format(Number(amount));
 }
 
+const COMPACT_USD = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+  notation: "compact",
+  maximumFractionDigits: 1,
+});
+
+/** Shortens large figures for KPI cards, where "$818.9M" reads at a glance and
+ *  "$818,926,998" does not. The exact figure is shown on hover. */
+export function formatUsdCompact(amount: string): string {
+  return COMPACT_USD.format(Number(amount));
+}
+
 const DATE_FORMATTER = new Intl.DateTimeFormat("en-GB", {
   day: "2-digit",
   month: "short",

@@ -2,7 +2,7 @@ from decimal import Decimal
 
 from datetime import date
 
-from sqlalchemy import Select, func, not_, or_, select
+from sqlalchemy import Select, func, select
 from sqlalchemy.orm import Session, contains_eager, selectinload
 
 from app.models import Country, Currency, Department, Employee, JobLevel
@@ -14,7 +14,7 @@ from app.schemas.employee import (
     SortDirection,
 )
 from app.services.currency import salary_in_usd_sql, to_minor_units
-from app.services.employment import active_predicate
+from app.services.employee_filters import apply_employee_filters
 from app.services.errors import ConflictError, NotFoundError, ValidationError
 
 _SORT_COLUMNS = {
@@ -25,29 +25,14 @@ _SORT_COLUMNS = {
 
 
 def _apply_filters(stmt: Select, params: EmployeeListParams) -> Select:
-    if params.q:
-        # SQLite's LIKE is case-insensitive for ASCII by default; lower() makes that
-        # explicit rather than relying on the dialect.
-        pattern = f"%{params.q.lower()}%"
-        stmt = stmt.where(
-            or_(
-                func.lower(Employee.first_name).like(pattern),
-                func.lower(Employee.last_name).like(pattern),
-                func.lower(Employee.email).like(pattern),
-            )
-        )
-
-    if params.country_id:
-        stmt = stmt.where(Employee.country_id.in_(params.country_id))
-    if params.department_id:
-        stmt = stmt.where(Employee.department_id.in_(params.department_id))
-    if params.job_level_id:
-        stmt = stmt.where(Employee.job_level_id.in_(params.job_level_id))
-    if params.is_active is not None:
-        active = active_predicate()
-        stmt = stmt.where(active if params.is_active else not_(active))
-
-    return stmt
+    return apply_employee_filters(
+        stmt,
+        q=params.q,
+        country_id=params.country_id,
+        department_id=params.department_id,
+        job_level_id=params.job_level_id,
+        is_active=params.is_active,
+    )
 
 
 def _apply_sort(stmt: Select, params: EmployeeListParams) -> Select:

@@ -62,13 +62,16 @@ Notes on the deliberate choices:
 
 **Pay Analytics Dashboard**
 - KPI cards, all normalized to USD and computed over active employees:
-  - Total payroll spend
+  - Total annual payroll spend
   - Headcount
   - Average salary
-  - Median salary
-- Breakdowns, each showing total payroll spend, headcount, and average salary:
+  - Median salary — shown alongside the average because pay is right-skewed. In the seeded data the mean sits 1.17x the median, so the two answer different questions: what the org spends per head, versus what a typical person earns.
+  - Leaving soon — active employees with a departure already scheduled
+- Breakdowns, each showing total payroll spend, headcount, and average salary, ranked by spend:
   - By country
   - By department
+- Filterable by country, department, and job level, using the same predicates as the directory. Deliberately no search box, since a dashboard answers "how do we pay this group" rather than "find this person", and no status filter, since the figures are always about people currently being paid.
+- Every figure is aggregated in SQL and returned already reduced, in a fixed four queries regardless of headcount. Median is computed with a window function, since SQLite has no percentile aggregate.
 
 **Seeding**
 - A script that generates 10 000 deterministic synthetic employees spread across the seeded countries, departments, and job levels, with salaries in their local currencies.
@@ -86,6 +89,7 @@ Notes on the deliberate choices:
 | Excel/CSV bulk import | The brief states a seed script is sufficient. |
 | Salary change history / audit trail | Edits overwrite in place. A real system would need this, but the MVP is scoped to current-state management, and adding it changes both the data model and every read path. Called out as the first thing to add post-MVP. |
 | Time-varying exchange rates | A single static seeded rate per currency. Effective-dated rates only matter for historical reporting, which is out of scope alongside salary history. |
+| Payroll cost over time | Hire and exit dates make it possible to reconstruct who was employed on any past date, but there is no salary history, so every past point would be computed from people's *current* pay. The chart would look authoritative and quietly misattribute today's salaries to last year's headcount. Excluded on accuracy grounds, not effort. |
 | Salary distribution histogram / pay bands, and breakdown by job level | Country and department breakdowns already answer "how the org pays people". Further slices are additive rather than informative at MVP, and each adds a query, an endpoint, and a chart to maintain. |
 | Postgres, caching, background jobs | 10,000 rows is small. Indexed SQLite queries are well within budget; adding infrastructure would be premature. |
 
