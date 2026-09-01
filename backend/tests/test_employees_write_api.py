@@ -1,3 +1,4 @@
+from datetime import date, timedelta
 from decimal import Decimal
 
 import pytest
@@ -204,8 +205,81 @@ class TestDeactivateAndReactivate:
     def employee_id(self, client, new_employee) -> int:
         return client.post(URL, json=new_employee).json()["id"]
 
+    def test_new_employees_have_no_exit_date(self, client, employee_id):
+        assert client.get(f"{URL}/{employee_id}").json()["exit_date"] is None
+
     def test_deactivate_sets_inactive(self, client, employee_id):
         assert client.post(f"{URL}/{employee_id}/deactivate").json()["is_active"] is False
+
+    def test_deactivate_records_today_by_default(self, client, employee_id):
+        body = client.post(f"{URL}/{employee_id}/deactivate").json()
+
+        assert body["exit_date"] == date.today().isoformat()
+
+    def test_deactivate_accepts_an_explicit_past_date(self, client, employee_id):
+        leaving = (date.today() - timedelta(days=30)).isoformat()
+        body = client.post(f"{URL}/{employee_id}/deactivate", json={"exit_date": leaving}).json()
+
+        assert body["exit_date"] == leaving
+        assert body["is_active"] is False
+
+    def test_future_exit_date_leaves_the_employee_active(self, client, employee_id):
+        """Someone serving notice is still employed and still paid."""
+        leaving = (date.today() + timedelta(days=30)).isoformat()
+        body = client.post(f"{URL}/{employee_id}/deactivate", json={"exit_date": leaving}).json()
+
+        assert body["exit_date"] == leaving
+        assert body["is_active"] is True
+        assert body["is_leaving"] is True
+
+    def test_scheduled_leaver_still_appears_in_the_active_listing(
+        self, client, employee_id
+    ):
+        leaving = (date.today() + timedelta(days=30)).isoformat()
+        client.post(f"{URL}/{employee_id}/deactivate", json={"exit_date": leaving})
+
+        body = client.get(URL, params={"is_active": True, "q": "ada"}).json()
+        assert employee_id in [item["id"] for item in body["items"]]
+
+    def test_exit_date_before_hire_date_is_rejected(self, client, employee_id):
+        body = client.post(
+            f"{URL}/{employee_id}/deactivate", json={"exit_date": "2000-01-01"}
+        )
+
+        assert body.status_code == 422
+
+    def test_reactivate_clears_the_exit_date(self, client, employee_id):
+        client.post(f"{URL}/{employee_id}/deactivate")
+        body = client.post(f"{URL}/{employee_id}/reactivate").json()
+
+        assert body["exit_date"] is None
+        assert body["is_active"] is True
+
+    def test_a_scheduled_departure_can_be_cancelled(self, client, employee_id):
+        leaving = (date.today() + timedelta(days=30)).isoformat()
+        client.post(f"{URL}/{employee_id}/deactivate", json={"exit_date": leaving})
+
+        body = client.post(f"{URL}/{employee_id}/reactivate").json()
+        assert body["exit_date"] is None
+        assert body["is_leaving"] is False
+
+    def test_exit_date_can_be_edited_directly(self, client, employee_id):
+        leaving = (date.today() - timedelta(days=5)).isoformat()
+        body = client.patch(f"{URL}/{employee_id}", json={"exit_date": leaving}).json()
+
+        assert body["exit_date"] == leaving
+        assert body["is_active"] is False
+
+    def test_editing_exit_date_to_null_reinstates(self, client, employee_id):
+        client.post(f"{URL}/{employee_id}/deactivate")
+
+        body = client.patch(f"{URL}/{employee_id}", json={"exit_date": None}).json()
+        assert body["is_active"] is True
+
+    def test_editing_exit_date_before_hire_date_is_rejected(self, client, employee_id):
+        response = client.patch(f"{URL}/{employee_id}", json={"exit_date": "2000-01-01"})
+
+        assert response.status_code == 422
 
     def test_deactivated_employee_is_still_retrievable(self, client, employee_id):
         client.post(f"{URL}/{employee_id}/deactivate")

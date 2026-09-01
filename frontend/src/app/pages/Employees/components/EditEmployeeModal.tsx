@@ -30,6 +30,7 @@ type FormState = {
   job_level_id: number;
   salary: string;
   hire_date: string;
+  exit_date: string;
 };
 
 type Errors = Partial<Record<keyof FormState, string>>;
@@ -44,6 +45,8 @@ function toFormState(employee: Employee): FormState {
     job_level_id: employee.job_level.id,
     salary: employee.salary.amount,
     hire_date: employee.hire_date,
+    // Empty string is the date input's "no value"; translated back to null on save.
+    exit_date: employee.exit_date ?? "",
   };
 }
 
@@ -54,6 +57,21 @@ const MINOR_UNITS: Record<string, number> = { JPY: 0 };
 function decimalPlaces(value: string): number {
   const [, decimals] = value.split(".");
   return decimals?.length ?? 0;
+}
+
+/** Spells out what the chosen date implies, since status is derived from it and
+ *  a future date does not mean the person has left. */
+function exitDateHint(exitDate: string): string {
+  if (!exitDate) return "Leave empty while employed";
+
+  const now = new Date();
+  const today = new Date(now.getTime() - now.getTimezoneOffset() * 60_000)
+    .toISOString()
+    .slice(0, 10);
+
+  return exitDate > today
+    ? "Future date — stays active until then"
+    : "Marks the employee as inactive";
 }
 
 export default function EditEmployeeModal({
@@ -122,6 +140,9 @@ export default function EditEmployeeModal({
       next.email = "Enter a valid email address";
     }
     if (!form.hire_date) next.hire_date = "Required";
+    if (form.exit_date && form.exit_date < form.hire_date) {
+      next.exit_date = "Cannot be before the hire date";
+    }
 
     const salary = form.salary.trim();
     if (!salary) {
@@ -148,8 +169,11 @@ export default function EditEmployeeModal({
       const value = typeof form[key] === "string" ? form[key].trim() : form[key];
       if (value !== original[key]) {
         // Only what actually changed, so a PATCH never clobbers a field the
-        // user did not touch.
-        Object.assign(changes, { [key]: value });
+        // user did not touch. An emptied exit date must go as an explicit null,
+        // since "" would not clear it.
+        Object.assign(changes, {
+          [key]: key === "exit_date" && value === "" ? null : value,
+        });
       }
     });
 
@@ -320,6 +344,22 @@ export default function EditEmployeeModal({
             value={form.hire_date}
             onChange={(e) => setField("hire_date", e.target.value)}
             className={field("hire_date")}
+          />
+        </FormField>
+
+        <FormField
+          label="Exit date"
+          htmlFor="exit_date"
+          error={errors.exit_date}
+          hint={exitDateHint(form.exit_date)}
+        >
+          <input
+            id="exit_date"
+            type="date"
+            value={form.exit_date}
+            min={form.hire_date}
+            onChange={(e) => setField("exit_date", e.target.value)}
+            className={field("exit_date")}
           />
         </FormField>
       </form>

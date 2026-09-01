@@ -7,11 +7,13 @@ from app.db.session import get_db
 from app.schemas.common import Page
 from app.schemas.employee import (
     EmployeeCreate,
+    EmployeeExit,
     EmployeeListParams,
     EmployeeOut,
     EmployeeUpdate,
 )
 from app.services import employee_service
+from app.services.employment import today
 
 router = APIRouter(prefix="/employees", tags=["employees"])
 
@@ -71,9 +73,18 @@ def update_employee(
 def deactivate_employee(
     employee_id: int,
     db: Annotated[Session, Depends(get_db)],
+    payload: EmployeeExit | None = None,
 ) -> EmployeeOut:
-    """Soft delete: the row is retained, since salary data is financial history."""
-    return EmployeeOut.from_model(employee_service.set_active(db, employee_id, False))
+    """Record a departure. Soft delete: the row is retained, since salary data is
+    financial history.
+
+    A future date schedules the departure; the employee stays active until it
+    arrives. Omitting the date means today.
+    """
+    exit_date = (payload.exit_date if payload else None) or today()
+    return EmployeeOut.from_model(
+        employee_service.set_exit_date(db, employee_id, exit_date)
+    )
 
 
 @router.post(
@@ -85,4 +96,5 @@ def reactivate_employee(
     employee_id: int,
     db: Annotated[Session, Depends(get_db)],
 ) -> EmployeeOut:
-    return EmployeeOut.from_model(employee_service.set_active(db, employee_id, True))
+    """Clears the exit date, whether the departure has happened or is scheduled."""
+    return EmployeeOut.from_model(employee_service.clear_exit_date(db, employee_id))

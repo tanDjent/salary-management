@@ -1,3 +1,5 @@
+from datetime import date
+
 import pytest
 
 from app.seed.data import COUNTRIES, CURRENCIES, DEPARTMENTS, JOB_LEVELS
@@ -78,10 +80,28 @@ class TestGenerateEmployees:
         for employee in generate_employees(count=500):
             assert EARLIEST_HIRE_DATE <= employee.hire_date <= LATEST_HIRE_DATE
 
-    def test_some_employees_are_deactivated(self):
-        """Soft-delete filtering needs inactive rows to actually exist."""
-        statuses = {e.is_active for e in generate_employees(count=500)}
-        assert statuses == {True, False}
+    def test_some_employees_have_departed(self):
+        """Status filtering needs departed rows to actually exist."""
+        exit_dates = [e.exit_date for e in generate_employees(count=500)]
+
+        assert any(exit_date is None for exit_date in exit_dates)
+        assert any(exit_date is not None for exit_date in exit_dates)
+
+    def test_some_departures_are_scheduled_in_the_future(self):
+        """The 'leaving soon' case must be reachable from seeded data, not only
+        by setting a future date by hand."""
+        as_of = date(2026, 6, 1)
+        exit_dates = [
+            e.exit_date for e in generate_employees(count=2_000, as_of=as_of)
+        ]
+
+        assert any(d is not None and d > as_of for d in exit_dates)
+        assert any(d is not None and d <= as_of for d in exit_dates)
+
+    def test_exit_date_is_never_before_hire_date(self):
+        for employee in generate_employees(count=2_000):
+            if employee.exit_date is not None:
+                assert employee.exit_date >= employee.hire_date
 
     def test_usd_salaries_stay_within_a_plausible_range(self):
         """Guards the band/factor arithmetic: a currency or factor mistake shows up

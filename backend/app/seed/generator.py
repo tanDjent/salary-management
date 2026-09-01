@@ -18,9 +18,14 @@ DEFAULT_SEED = 20240101
 DEFAULT_EMPLOYEE_COUNT = 10_000
 EMAIL_DOMAIN = "acme.example"
 
-# Share of the workforce seeded as deactivated, so soft-delete filtering has
-# something to exclude.
-INACTIVE_RATE = 0.04
+# Share of the workforce that has left, so status filtering has something to
+# exclude. A small slice of those are future-dated: still on the payroll today,
+# with a departure already scheduled.
+DEPARTED_RATE = 0.04
+SCHEDULED_DEPARTURE_RATE = 0.15
+
+# How far ahead a scheduled departure can be, roughly a notice period.
+MAX_NOTICE_DAYS = 90
 
 EARLIEST_HIRE_DATE = date(2015, 1, 1)
 LATEST_HIRE_DATE = date(2025, 12, 31)
@@ -44,7 +49,7 @@ class GeneratedEmployee:
     base_salary: int
     currency_code: str
     hire_date: date
-    is_active: bool
+    exit_date: date | None
 
 
 def round_to_significant(amount: float, digits: int = 3) -> int:
@@ -91,8 +96,31 @@ def _salary_in_minor_units(
     return to_minor_units(round_to_significant(local_amount), currency_code), currency_code
 
 
+def _exit_date_for(
+    rng: random.Random, hire_date: date, reference_date: date
+) -> date | None:
+    """Departure date, or None for the majority who are still employed.
+
+    Most departures are in the past. A few are future-dated so the "leaving soon"
+    case exists in the data rather than only being reachable by hand.
+    """
+    if rng.random() >= DEPARTED_RATE:
+        return None
+
+    if rng.random() < SCHEDULED_DEPARTURE_RATE:
+        return reference_date + timedelta(days=rng.randint(1, MAX_NOTICE_DAYS))
+
+    # Somewhere between being hired and today, never before the hire date.
+    earliest = hire_date + timedelta(days=1)
+    if earliest >= reference_date:
+        return reference_date
+    return earliest + timedelta(days=rng.randint(0, (reference_date - earliest).days))
+
+
 def generate_employees(
-    count: int = DEFAULT_EMPLOYEE_COUNT, seed: int = DEFAULT_SEED
+    count: int = DEFAULT_EMPLOYEE_COUNT,
+    seed: int = DEFAULT_SEED,
+    as_of: date | None = None,
 ) -> Iterator[GeneratedEmployee]:
     """Yield `count` employees. The same seed always yields the same people."""
     rng = random.Random(seed)
@@ -108,6 +136,8 @@ def generate_employees(
     hire_window_days = (LATEST_HIRE_DATE - EARLIEST_HIRE_DATE).days
     seen_emails: set[str] = set()
 
+    reference_date = as_of or date.today()
+
     for _ in range(count):
         country = pick_country()
         department = pick_department()
@@ -121,6 +151,8 @@ def generate_employees(
             rng, country, department.pay_factor, level.min_usd, level.max_usd
         )
 
+        hire_date = EARLIEST_HIRE_DATE + timedelta(days=rng.randint(0, hire_window_days))
+
         yield GeneratedEmployee(
             first_name=first_name,
             last_name=last_name,
@@ -130,8 +162,8 @@ def generate_employees(
             job_level_title=level.title,
             base_salary=base_salary,
             currency_code=currency_code,
-            hire_date=EARLIEST_HIRE_DATE + timedelta(days=rng.randint(0, hire_window_days)),
-            is_active=rng.random() >= INACTIVE_RATE,
+            hire_date=hire_date,
+            exit_date=_exit_date_for(rng, hire_date, reference_date),
         )
 
 

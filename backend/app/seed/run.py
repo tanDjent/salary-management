@@ -94,7 +94,7 @@ def seed_employees(db: Session, count: int, seed: int) -> int:
                 "base_salary": employee.base_salary,
                 "currency_code": employee.currency_code,
                 "hire_date": employee.hire_date,
-                "is_active": employee.is_active,
+                "exit_date": employee.exit_date,
                 "created_at": now,
                 "updated_at": now,
             }

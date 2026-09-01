@@ -1,7 +1,6 @@
 from datetime import date, datetime, timezone
 
 from sqlalchemy import (
-    Boolean,
     CheckConstraint,
     Date,
     DateTime,
@@ -35,7 +34,11 @@ class Employee(Base):
     )
 
     hire_date: Mapped[date] = mapped_column(Date, nullable=False)
-    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
+    # The single source of truth for employment status. NULL means still employed;
+    # a date in the future means leaving but currently active. Storing a separate
+    # is_active flag alongside this would let the two disagree.
+    exit_date: Mapped[date | None] = mapped_column(Date, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=lambda: datetime.now(timezone.utc)
@@ -54,9 +57,13 @@ class Employee(Base):
 
     __table_args__ = (
         CheckConstraint("base_salary >= 0", name="ck_employee_salary_non_negative"),
+        CheckConstraint(
+            "exit_date IS NULL OR exit_date >= hire_date",
+            name="ck_employee_exit_after_hire",
+        ),
         Index("ix_employee_last_name", "last_name"),
         Index("ix_employee_country_id", "country_id"),
         Index("ix_employee_department_id", "department_id"),
         Index("ix_employee_job_level_id", "job_level_id"),
-        Index("ix_employee_is_active", "is_active"),
+        Index("ix_employee_exit_date", "exit_date"),
     )

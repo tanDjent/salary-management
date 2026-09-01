@@ -1,6 +1,8 @@
 from decimal import Decimal
 
-from sqlalchemy import Select, func, or_, select
+from datetime import date
+
+from sqlalchemy import Select, func, not_, or_, select
 from sqlalchemy.orm import Session, contains_eager, selectinload
 
 from app.models import Country, Currency, Department, Employee, JobLevel
@@ -12,6 +14,7 @@ from app.schemas.employee import (
     SortDirection,
 )
 from app.services.currency import salary_in_usd_sql, to_minor_units
+from app.services.employment import active_predicate
 from app.services.errors import ConflictError, NotFoundError, ValidationError
 
 _SORT_COLUMNS = {
@@ -41,7 +44,8 @@ def _apply_filters(stmt: Select, params: EmployeeListParams) -> Select:
     if params.job_level_id:
         stmt = stmt.where(Employee.job_level_id.in_(params.job_level_id))
     if params.is_active is not None:
-        stmt = stmt.where(Employee.is_active.is_(params.is_active))
+        active = active_predicate()
+        stmt = stmt.where(active if params.is_active else not_(active))
 
     return stmt
 
@@ -173,7 +177,7 @@ def create_employee(db: Session, payload: EmployeeCreate) -> Employee:
         base_salary=_salary_to_minor_units(payload.salary, currency),
         currency_code=currency.code,
         hire_date=payload.hire_date,
-        is_active=True,
+        exit_date=None,
     )
     db.add(employee)
     db.commit()
@@ -204,18 +208,44 @@ def update_employee(db: Session, employee_id: int, payload: EmployeeUpdate) -> E
     if "salary" in changes:
         employee.base_salary = _salary_to_minor_units(changes["salary"], currency)
 
-    for field in ("first_name", "last_name", "email", "department_id", "job_level_id", "hire_date"):
+    for field in (
+        "first_name",
+        "last_name",
+        "email",
+        "department_id",
+        "job_level_id",
+        "hire_date",
+        "exit_date",
+    ):
         if field in changes:
             setattr(employee, field, changes[field])
+
+    _check_exit_after_hire(employee.hire_date, employee.exit_date)
 
     db.commit()
     return _reload(db, employee)
 
 
-def set_active(db: Session, employee_id: int, is_active: bool) -> Employee:
-    """Soft delete and its inverse. Salary records are financial history, so rows
-    are never removed."""
+def _check_exit_after_hire(hire_date: date, exit_date: date | None) -> None:
+    if exit_date is not None and exit_date < hire_date:
+        raise ValidationError(
+            f"Exit date {exit_date} is before the hire date {hire_date}"
+        )
+
+
+def set_exit_date(db: Session, employee_id: int, exit_date: date) -> Employee:
+    """Record a departure. Soft delete: salary data is financial history, so the
+    row is kept and the date alone determines status."""
     employee = _require_employee(db, employee_id)
-    employee.is_active = is_active
+    _check_exit_after_hire(employee.hire_date, exit_date)
+    employee.exit_date = exit_date
+    db.commit()
+    return _reload(db, employee)
+
+
+def clear_exit_date(db: Session, employee_id: int) -> Employee:
+    """Reverse a departure, whether it has already taken effect or is scheduled."""
+    employee = _require_employee(db, employee_id)
+    employee.exit_date = None
     db.commit()
     return _reload(db, employee)

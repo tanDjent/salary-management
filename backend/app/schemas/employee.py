@@ -51,11 +51,16 @@ class EmployeeOut(BaseModel):
     job_level: JobLevelOut
     salary: SalaryOut
     hire_date: date
+    exit_date: date | None
+    # Derived from exit_date rather than stored, so it cannot contradict it.
     is_active: bool
+    # Active, but with a departure already scheduled.
+    is_leaving: bool
 
     @classmethod
     def from_model(cls, employee: Employee) -> "EmployeeOut":
         from app.services.currency import to_base_currency, to_major_units
+        from app.services.employment import is_active, is_leaving
 
         amount = to_major_units(employee.base_salary, employee.currency.minor_unit)
         return cls(
@@ -72,7 +77,9 @@ class EmployeeOut(BaseModel):
                 amount_usd=to_base_currency(amount, employee.currency.exchange_rate.rate_to_usd),
             ),
             hire_date=employee.hire_date,
-            is_active=employee.is_active,
+            exit_date=employee.exit_date,
+            is_active=is_active(employee.exit_date),
+            is_leaving=is_leaving(employee.exit_date),
         )
 
 
@@ -118,6 +125,8 @@ class EmployeeUpdate(BaseModel):
     job_level_id: int | None = None
     salary: Decimal | None = Field(default=None, ge=0)
     hire_date: date | None = None
+    # Explicit null clears the exit date, which is how a departure is reversed.
+    exit_date: date | None = None
 
     @model_validator(mode="after")
     def require_salary_when_country_changes(self) -> "EmployeeUpdate":
@@ -128,6 +137,12 @@ class EmployeeUpdate(BaseModel):
                 "changing country changes the pay currency; provide a salary as well"
             )
         return self
+
+
+class EmployeeExit(BaseModel):
+    """Body for the deactivate action. Omitting the date means today."""
+
+    exit_date: date | None = None
 
 
 class EmployeeSortField(str, Enum):

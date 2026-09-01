@@ -32,7 +32,7 @@ Normalized, with lookup tables so that dashboard groupings and directory filters
 - **job_level** — `id`, `title`, `rank` (ordering for the compensation ladder)
 - **currency** — `code` (ISO 4217, PK), `name`, `symbol`, `minor_unit` (decimal places, e.g. 2 for USD, 0 for JPY)
 - **exchange_rate** — `currency_code` (FK), `rate_to_usd`. One static row per currency, seeded.
-- **employee** — `id`, `first_name`, `last_name`, `email` (unique), `country_id`, `department_id`, `job_level_id`, `base_salary` (integer minor units), `currency_code`, `hire_date`, `is_active`, `created_at`, `updated_at`
+- **employee** — `id`, `first_name`, `last_name`, `email` (unique), `country_id`, `department_id`, `job_level_id`, `base_salary` (integer minor units), `currency_code`, `hire_date`, `exit_date` (nullable), `created_at`, `updated_at`
 
 Notes on the deliberate choices:
 
@@ -40,7 +40,9 @@ Notes on the deliberate choices:
 - Minor units are **not assumed to be hundredths**. `currency.minor_unit` drives the scaling, since JPY and KRW have zero decimal places and a hardcoded ÷100 would misreport those salaries by 100x.
 - Currency metadata and exchange rates are **separate tables** despite being 1:1 today. Name, symbol, and decimal places are immutable properties of a currency; rates are volatile. Splitting on rate of change means effective-dating rates later touches one table instead of the one that everything joins to.
 - USD normalization happens **at read time** (`base_salary * rate_to_usd`), never at write time, so the stored value is never lossy.
-- `is_active` implements **soft delete**. Salary records are financial history; hard deletes are not acceptable. Deactivated employees are excluded from analytics by default.
+- `exit_date` implements **soft delete** and is the single source of truth for employment status. Salary records are financial history; hard deletes are not acceptable.
+- Status is **derived, not stored**: an employee is active when `exit_date` is null or still in the future. A stored `is_active` flag alongside a date would let the two disagree, and departures would need a scheduled job to take effect. Deriving means a future-dated exit becomes effective on its own date. The API still exposes `is_active` as a computed field, so clients need not reimplement the rule.
+- A future `exit_date` means **leaving but still employed**: the person is counted in headcount and pay reporting until the date arrives, because they are still being paid.
 
 ## 4. Features In Scope
 
@@ -54,7 +56,7 @@ Notes on the deliberate choices:
 - View a single employee's detail.
 - Add a new employee.
 - Edit an employee (PATCH: only the fields sent are changed).
-- Deactivate (soft-delete) and reactivate.
+- Record a departure by setting an exit date, defaulting to today; a future date schedules it. Reinstating clears the date and also cancels a scheduled departure. Exit dates before the hire date are rejected.
 - Pay currency is derived from the employee's country rather than submitted, so the two cannot contradict each other. Changing country therefore changes the currency, and the request must supply a new salary — the stored figure is denominated in the old currency and reinterpreting it would silently misstate someone's pay.
 - Server-side validation: unique email (409), non-negative salary, existing lookup references, and no more decimal places than the currency supports (422).
 

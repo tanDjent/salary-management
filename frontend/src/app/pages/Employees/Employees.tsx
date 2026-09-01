@@ -1,27 +1,17 @@
 import { useMemo, useState } from "react";
-import {
-  keepPreviousData,
-  useMutation,
-  useQuery,
-  useQueryClient,
-} from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { createColumnHelper } from "@tanstack/react-table";
 import { Pencil, UserCheck, UserMinus } from "lucide-react";
 
 import DataTable from "../../../common/DataTable";
 import Pagination from "../../../common/Pagination";
-import ConfirmDialog from "../../../common/ConfirmDialog";
 import EmployeeFilters from "./components/EmployeeFilters";
 import EditEmployeeModal from "./components/EditEmployeeModal";
+import ExitDateDialog from "./components/ExitDateDialog";
 import { PAGE_SIZE, useEmployeeFilters } from "./hooks/useEmployeeFilters";
-import {
-  fetchEmployees,
-  setEmployeeActive,
-  type Employee,
-} from "../../../api/employees";
+import { fetchEmployees, type Employee } from "../../../api/employees";
 import { fetchLookups } from "../../../api/lookups";
 import { formatDate, formatMoney, formatUsd } from "../../../common/format";
-import { useToast } from "../../../common/toast/useToast";
 
 const columnHelper = createColumnHelper<Employee>();
 
@@ -46,26 +36,6 @@ export default function Employees() {
 
   const [editing, setEditing] = useState<Employee | null>(null);
   const [changingStatus, setChangingStatus] = useState<Employee | null>(null);
-  const { showToast } = useToast();
-  const queryClient = useQueryClient();
-
-  const statusMutation = useMutation({
-    mutationFn: (employee: Employee) =>
-      setEmployeeActive(employee.id, !employee.is_active),
-    onSuccess: (updated) => {
-      queryClient.invalidateQueries({ queryKey: ["employees"] });
-      showToast(
-        `${updated.first_name} ${updated.last_name} is now ${
-          updated.is_active ? "active" : "inactive"
-        }.`,
-      );
-      setChangingStatus(null);
-    },
-    onError: (error: Error) => {
-      showToast(error.message, "error");
-      setChangingStatus(null);
-    },
-  });
 
   const { data: lookups } = useQuery({
     queryKey: ["lookups"],
@@ -138,16 +108,39 @@ export default function Employees() {
       columnHelper.accessor("is_active", {
         id: "is_active",
         header: "Status",
-        cell: (info) =>
-          info.getValue() ? (
-            <span className="inline-flex rounded-full bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700">
-              Active
-            </span>
-          ) : (
-            <span className="inline-flex rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">
+        cell: (info) => {
+          const { is_active, is_leaving, exit_date } = info.row.original;
+
+          // Three states, not two: someone serving notice is still active and
+          // still paid, but HR needs to see the departure coming.
+          if (is_leaving) {
+            return (
+              <span
+                title={`Leaving on ${formatDate(exit_date!)}`}
+                className="inline-flex whitespace-nowrap rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700"
+              >
+                Leaving {formatDate(exit_date!)}
+              </span>
+            );
+          }
+
+          if (is_active) {
+            return (
+              <span className="inline-flex rounded-full bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700">
+                Active
+              </span>
+            );
+          }
+
+          return (
+            <span
+              title={exit_date ? `Left on ${formatDate(exit_date)}` : undefined}
+              className="inline-flex rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600"
+            >
               Inactive
             </span>
-          ),
+          );
+        },
       }),
       columnHelper.display({
         id: "edit",
@@ -169,18 +162,22 @@ export default function Employees() {
         header: "",
         cell: (info) => {
           const employee = info.row.original;
-          const label = employee.is_active ? "Deactivate" : "Reactivate";
-          const Icon = employee.is_active ? UserMinus : UserCheck;
+          // A scheduled leaver is still active, but the useful action is to
+          // cancel the departure rather than record another one.
+          const isReinstating = !employee.is_active || employee.is_leaving;
+          const label = isReinstating ? "Reinstate" : "Record departure for";
+          const Icon = isReinstating ? UserCheck : UserMinus;
+
           return (
             <button
               type="button"
-              title={`${label} employee`}
+              title={isReinstating ? "Reinstate employee" : "Record departure"}
               aria-label={`${label} ${employee.first_name} ${employee.last_name}`}
               onClick={() => setChangingStatus(employee)}
               className={`rounded p-1.5 text-gray-400 transition ${
-                employee.is_active
-                  ? "hover:bg-red-50 hover:text-red-600"
-                  : "hover:bg-green-50 hover:text-green-700"
+                isReinstating
+                  ? "hover:bg-green-50 hover:text-green-700"
+                  : "hover:bg-red-50 hover:text-red-600"
               }`}
             >
               <Icon size={16} />
@@ -240,7 +237,6 @@ export default function Employees() {
                 totalPages={data?.total_pages ?? 0}
                 itemLabel="employees"
                 onPageChange={(nextPage) => update({ page: nextPage }, false)}
-                className="mt-2"
               />
             )}
           </>
@@ -253,20 +249,10 @@ export default function Employees() {
         onClose={() => setEditing(null)}
       />
 
-      <ConfirmDialog
-        open={changingStatus !== null}
-        onOpenChange={(open) => !open && setChangingStatus(null)}
-        title={
-          changingStatus?.is_active ? "Deactivate employee?" : "Reactivate employee?"
-        }
-        message={
-          changingStatus?.is_active
-            ? `${changingStatus.first_name} ${changingStatus.last_name} will be excluded from active headcount and pay reporting. Their record is kept, and you can reactivate them at any time.`
-            : `${changingStatus?.first_name} ${changingStatus?.last_name} will be included in active headcount and pay reporting again.`
-        }
-        confirmLabel={changingStatus?.is_active ? "Deactivate" : "Reactivate"}
-        isPending={statusMutation.isPending}
-        onConfirm={() => changingStatus && statusMutation.mutate(changingStatus)}
+      <ExitDateDialog
+        key={changingStatus?.id}
+        employee={changingStatus}
+        onClose={() => setChangingStatus(null)}
       />
     </div>
   );

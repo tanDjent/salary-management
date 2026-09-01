@@ -29,7 +29,10 @@ export type Employee = {
   job_level: JobLevel;
   salary: Salary;
   hire_date: string;
+  /** Null while employed. A date in the future means leaving but still active. */
+  exit_date: string | null;
   is_active: boolean;
+  is_leaving: boolean;
 };
 
 export type Page<T> = {
@@ -79,6 +82,8 @@ export type EmployeeUpdate = {
   job_level_id?: number;
   salary?: string;
   hire_date?: string;
+  /** Explicit null clears the exit date, reinstating the employee. */
+  exit_date?: string | null;
 };
 
 export function updateEmployee(
@@ -88,7 +93,15 @@ export function updateEmployee(
   return api.patch<Employee>(buildUrl(`/employees/${id}`), changes);
 }
 
-export function setEmployeeActive(id: number, isActive: boolean): Promise<Employee> {
-  const action = isActive ? "reactivate" : "deactivate";
-  return api.post<Employee>(buildUrl(`/employees/${id}/${action}`));
+/** Records a departure. A future date schedules it; the employee stays active
+ *  until then. Omitting the date means today. */
+export function deactivateEmployee(id: number, exitDate?: string): Promise<Employee> {
+  return api.post<Employee>(buildUrl(`/employees/${id}/deactivate`), {
+    exit_date: exitDate ?? null,
+  });
+}
+
+/** Clears the exit date, whether the departure has happened or is scheduled. */
+export function reactivateEmployee(id: number): Promise<Employee> {
+  return api.post<Employee>(buildUrl(`/employees/${id}/reactivate`));
 }

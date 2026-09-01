@@ -213,14 +213,29 @@ class TestSalaryRepresentation:
             assert Decimal(item["salary"]["amount"]) == Decimal(item["salary"]["amount_usd"])
 
     def test_zero_decimal_currency_is_not_divided_by_a_hundred(self, client, seeded_db):
-        """A JPY salary must read as millions of yen, not tens of thousands."""
-        country_id = seeded_db.scalar(select(Country.id).where(Country.iso_code == "JP"))
-        body = client.get(LIST_URL, params={"country_id": country_id}).json()
+        """A JPY salary must read as millions of yen, not tens of thousands.
 
-        assert body["items"], "fixture has no JPY employees to assert on"
-        for item in body["items"]:
-            assert item["salary"]["currency"] == "JPY"
-            assert Decimal(item["salary"]["amount"]) > 1_000_000
+        The employee is created rather than found in the fixture: whether the
+        random sample happens to contain a Japanese employee is not something
+        this test should depend on.
+        """
+        country_id = seeded_db.scalar(select(Country.id).where(Country.iso_code == "JP"))
+        created = client.post(
+            LIST_URL,
+            json={
+                "first_name": "Hana",
+                "last_name": "Suzuki",
+                "email": "hana.suzuki@acme.example",
+                "country_id": country_id,
+                "department_id": seeded_db.scalar(select(Department.id)),
+                "job_level_id": seeded_db.scalar(select(JobLevel.id)),
+                "salary": "8000000",
+                "hire_date": "2022-04-01",
+            },
+        ).json()
+
+        assert created["salary"]["currency"] == "JPY"
+        assert Decimal(created["salary"]["amount"]) == Decimal("8000000")
 
 
 class TestGetEmployee:
