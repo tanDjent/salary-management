@@ -44,6 +44,40 @@ jobs:
         run: |
           alembic check
 
+  # The backend job installs requirements-dev.txt, a superset, so it can never
+  # notice a runtime import that is only declared as a dev dependency. This
+  # reproduces the deploy exactly: runtime dependencies alone, then the start
+  # command's migrate-and-seed sequence.
+  runtime-deps:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install runtime dependencies only
+        run: pip install -r requirements.txt
+
+      - name: Migrate and seed, as the deploy does
+        env:
+          DATABASE_URL: sqlite:///./ci.db
+        run: |
+          alembic upgrade head
+          python -m app.seed.run --count 100
+
+      - name: App imports and serves
+        env:
+          DATABASE_URL: sqlite:///./ci.db
+        run: python -c "from app.main import app; print('app imported')"
+
   frontend:
     runs-on: ubuntu-latest
     defaults:

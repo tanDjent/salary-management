@@ -5,3 +5,6 @@ alembic==1.14.0
 pydantic==2.10.4
 email-validator==2.2.0
 pydantic-settings==2.7.0
+# Runtime, not dev: app/seed/generator.py ships with the app and the deploy runs
+# it to populate the database on first boot.
+faker==33.1.0
