@@ -5,7 +5,7 @@ multiple countries, replacing a spreadsheet-based process. It does two things: i
 employee findable and editable in a few seconds, and it answers *"how does the org pay
 people?"* on one screen, normalized across currencies.
 
-**Live:** [app](https://salary-management-sooty.vercel.app) ·
+**Live:** [App](https://salary-management-sooty.vercel.app) ·
 [API docs](https://salary-management-api-u7yt.onrender.com/docs)
 
 > The API is on Render's free tier, which spins down after 15 minutes of inactivity. The first
