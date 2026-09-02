@@ -13,8 +13,7 @@ people?"* on one screen, normalized across currencies.
 > succeeding. It is not broken; give it a reload.
 
 **Documents:** [Requirements and trade-offs](docs/requirements.md) — the scope, the data model,
-and what was deliberately left out, with reasoning. [Learning notes](LEARNING-NOTES.md) — a
-running record of the decisions as they were made.
+and what was deliberately left out, with reasoning.
 
 ## Running it locally
 
