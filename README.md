@@ -65,7 +65,7 @@ builds, where the two halves sit on different origins — see
 
 ```bash
 cd backend  && pytest                              # 171 tests, ~4s
-cd frontend && npm test                            # 59 tests, ~2s
+cd frontend && npm test                            # 87 tests, ~2s
 cd frontend && npm run lint && npm run build       # lint and typecheck
 ```
 
@@ -153,11 +153,3 @@ an empty database, and a check that the models have not drifted from the migrati
 third job installs only the runtime requirements and runs the deploy's own migrate-and-seed
 sequence, because the test job installs a superset and so cannot notice a production import
 declared as a dev dependency. That job exists because exactly this reached production once.
-
-## Known gaps
-
-Honest about what a reviewer will notice. Salary edits overwrite in place — there is no change
-history, which a real system needs and which is the first thing to add. Exchange rates are static
-and unversioned. There is no authentication, per the brief. The frontend tests cover the logic
-that can be wrong — formatting, filter state, form rules — but not the pages end to end, so a
-broken wire-up between a page and its hook would pass; there are no browser-level tests.
